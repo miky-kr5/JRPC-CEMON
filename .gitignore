@@ -87,3 +87,10 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Emacs droppings
+*~
+
+# C app and compiled files
+cemon
+*.o
