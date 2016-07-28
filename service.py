@@ -69,6 +69,7 @@ class JRPCNotificationError(JRPCError):
 
 class BaseService(object):
     name = "BASE SERVICE"
+    exported_methods = ['get_disponibility']
 
     def get_disponibility(self):
         return r.random()
@@ -89,7 +90,7 @@ class BaseService(object):
 
         if version != "2.0":
             raise JRPCInvalidRequestError(_id, "Invalid version number: " + 2.0)
-        if method not in dir(self):
+        if method not in self.exported_methods:
             raise JRPCUnknownMethodError(method, _id)
 
         return (version, _id, method)
