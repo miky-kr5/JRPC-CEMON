@@ -72,30 +72,31 @@ class BaseService(object):
     def get_disponibility(self):
         return r.random()
     
+    def validate_request(self, req):
+        if not req.has_key("jsonrpc") and not req.has_key("method"):
+            raise JRPCInvalidRequestError(None)
+
+        if not req.has_key("id"):
+            raise JRPCNotificationError()
+
+        version = req["jsonrpc"]
+        _id = req["id"]
+        method = req["method"]
+
+        if version != "2.0":
+            raise JRPCInvalidRequestError(_id)
+        if method not in dir(self):
+            raise JRPCUnknownMethodError(method, _id)
+
+        return (version, _id, method)
+
     def POST(self):
         try:
             _id = None
             req = json.loads(web.data())
-
-            if not req.has_key("jsonrpc") and not req.has_key("method"):
-                raise JRPCInvalidRequestError(None)
-        
-            version = req["jsonrpc"]
-
-            if not req.has_key("id"):
-                raise JRPCNotificationError()
-            
-            _id = req["id"]
-
-            if version != "2.0":
-                raise JRPCInvalidRequestError(_id)
-            else:
-                method = req["method"]
-                if method not in dir(self):
-                    raise JRPCUnknownMethodError(method, _id)
-                else:
-                    disp = getattr(self, method)()
-                    response = json.dumps({"jsonrpc": "2.0", "id": _id, "result": disp})
+            version, _id, method = self.validate_request(req)
+            disp = getattr(self, method)()
+            response = json.dumps({"jsonrpc": "2.0", "id": _id, "result": disp})
             
         except JRPCError as e:
             response = str(e)
