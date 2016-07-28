@@ -45,11 +45,12 @@ class JRPCError(Exception):
     pass
 
 class JRPCInvalidRequestError(JRPCError):
-    def __init__(self, jrpc_id):
+    def __init__(self, jrpc_id, msg):
         self.jrpc_id = jrpc_id
+        self.msg = msg
 
     def __str__(self):
-        return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": -32600, "message": "Invalid request"}})
+        return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": -32600, "message": "Invalid request: " + msg}})
 
 class JRPCUnknownMethodError(JRPCError):
     def __init__(self, method, jrpc_id):
@@ -73,18 +74,21 @@ class BaseService(object):
         return r.random()
     
     def validate_request(self, req):
-        if not req.has_key("jsonrpc") and not req.has_key("method"):
-            raise JRPCInvalidRequestError(None)
+        try:
+            if not req.has_key("jsonrpc") and not req.has_key("method"):
+                raise JRPCInvalidRequestError(None, "Request is missing mandatory attributes")
 
-        if not req.has_key("id"):
-            raise JRPCNotificationError()
+            if not req.has_key("id"):
+                raise JRPCNotificationError()
+        except AttributeError as e:
+            raise JRPCInvalidRequestError(None, "Request is not a JSON object")
 
         version = req["jsonrpc"]
         _id = req["id"]
         method = req["method"]
 
         if version != "2.0":
-            raise JRPCInvalidRequestError(_id)
+            raise JRPCInvalidRequestError(_id, "Invalid version number: " + 2.0)
         if method not in dir(self):
             raise JRPCUnknownMethodError(method, _id)
 
