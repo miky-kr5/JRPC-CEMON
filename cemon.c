@@ -197,7 +197,7 @@ int main(int argc, char ** argv) {
     return EXIT_FAILURE;
   }
 
-  printf("\nWelcome to the " ANSI_BOLD_RED "J" ANSI_BOLD_GREEN "RPC" ANSI_RESET_STYLE "-" ANSI_BOLD_BLUE "CEMON" ANSI_RESET_STYLE " libcurl client.\n\n");
+  printf("\nWelcome to the libcurl " ANSI_BOLD_RED "J" ANSI_BOLD_GREEN "RPC" ANSI_RESET_STYLE "-" ANSI_BOLD_BLUE "CEMON" ANSI_RESET_STYLE " client.\n\n");
   printf("Reading service URLs from " ANSI_BOLD_GREEN "%s" ANSI_RESET_STYLE "\n\n", argv[1]);
 
   if(!read_conf(argv[1])) {
