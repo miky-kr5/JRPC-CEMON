@@ -187,7 +187,7 @@ int main(int argc, char ** argv) {
   CURL   *     curl;                          // cURL handle.
   CURLcode     res;                           // cURL return code.
   data_t       chunk;                         // Data obtained from a service.
-  json_t *     json_req;                      // Jansson representation of a JSON-RPC request message.
+  json_t *     json_req = NULL;               // Jansson representation of a JSON-RPC request message.
   char   *     req;                           // JSON-RPC request message as text.
   json_t *     root = NULL;                   // Root element of a JSON-RPC response message.
   json_error_t error;                         // Jansson return code.
@@ -253,14 +253,14 @@ int main(int argc, char ** argv) {
 	  if(validate_response(root))
 	    responses++;
 
-	  free(root);
+	  json_decref(root);
 	}
       }
 
       disponibility *= 1.0;
       
       free(chunk.memory);
-      free(json_req);
+      json_decref(json_req);
       free(req);
     }
 
