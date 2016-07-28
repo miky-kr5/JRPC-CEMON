@@ -38,6 +38,7 @@
  */
 #define ANSI_BOLD_RED    "\x1b[1;31m"
 #define ANSI_BOLD_GREEN  "\x1b[1;32m"
+#define ANSI_BOLD_YELLOW "\x1b[1;33m"
 #define ANSI_BOLD_BLUE   "\x1b[1;34m"
 #define ANSI_RESET_STYLE "\x1b[m"
 
@@ -247,13 +248,14 @@ int main(int argc, char ** argv) {
       if(res != CURLE_OK) {
 	/* If the service failed to respond or wasn't there then print an error message. */
 	printf(" [" ANSI_BOLD_RED "FAIL" ANSI_RESET_STYLE "]\n");
+	printf(ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": Service did not answer.\n");
 #ifndef NDEBUG
 	fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 #endif
 
       } else {
 	/* Else process the received response. */
-	printf(" [" ANSI_BOLD_GREEN " OK " ANSI_RESET_STYLE "] Returned: " ANSI_BOLD_BLUE "%1.2lf" ANSI_RESET_STYLE "\n", 1.0);
+	printf(" [" ANSI_BOLD_GREEN " OK " ANSI_RESET_STYLE "]\n");
 #ifndef NDEBUG
 	fprintf(stderr, "SERVICE: %s - RESPONSE: %s\n", services[i], chunk.memory);
 #endif
@@ -263,8 +265,11 @@ int main(int argc, char ** argv) {
 	if(!root) {
 	  printf(ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": failed to parse response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
 	} else {
-	  if(validate_response(root))
+	  if(validate_response(root)) {
+	    printf(ANSI_BOLD_GREEN "Returned" ANSI_RESET_STYLE " {Name: " ANSI_BOLD_YELLOW "%s" ANSI_RESET_STYLE, "COMING SOON");
+	    printf(", Disponibility: " ANSI_BOLD_YELLOW "%1.2lf" ANSI_RESET_STYLE "}\n", 1.0);
 	    responses++;
+	  }
 
 	  json_decref(root);
 	}
@@ -280,12 +285,10 @@ int main(int argc, char ** argv) {
     }
 
     /* Print how many services responded. */
-    if(responses == 1)
-      printf("\n" ANSI_BOLD_RED "1" ANSI_RESET_STYLE " service of %d responded.\n", num_services);
-    else if(responses < num_services)
-      printf("\n" ANSI_BOLD_RED "%d" ANSI_RESET_STYLE " services out of %d responded.\n", responses, num_services);
+    if(responses < num_services)
+      printf("\n" ANSI_BOLD_RED "%d" ANSI_RESET_STYLE " out of " ANSI_BOLD_GREEN "%d" ANSI_RESET_STYLE " services responded.\n", responses, num_services);
     else
-      printf("\n" ANSI_BOLD_GREEN "%d" ANSI_RESET_STYLE " services out of %d responded.\n", responses, num_services);
+      printf("\n" ANSI_BOLD_GREEN "%d" ANSI_RESET_STYLE " out of " ANSI_BOLD_GREEN "%d" ANSI_RESET_STYLE " services responded.\n", responses, num_services);
 
     /* Print the disponibility of the system. */
     if(disponibility >= 0.95)

@@ -50,7 +50,7 @@ class JRPCInvalidRequestError(JRPCError):
         self.msg = msg
 
     def __str__(self):
-        return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": -32600, "message": "Invalid request: " + msg}})
+        return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": -32600, "message": "Invalid request: " + self.msg}})
 
 class JRPCUnknownMethodError(JRPCError):
     def __init__(self, method, jrpc_id):
@@ -76,20 +76,20 @@ class BaseService(object):
     
     def validate_request(self, req):
         try:
-            if not req.has_key("jsonrpc") and not req.has_key("method"):
+            if not req.has_key("jsonrpc") or not req.has_key("method"):
                 raise JRPCInvalidRequestError(None, "Request is missing mandatory attributes")
 
             if not req.has_key("id"):
                 raise JRPCNotificationError()
         except AttributeError as e:
-            raise JRPCInvalidRequestError(None, "Request is not a JSON object")
+            raise JRPCInvalidRequestError(None, "Request's root is not a JSON object")
 
         version = req["jsonrpc"]
         _id = req["id"]
         method = req["method"]
 
         if version != "2.0":
-            raise JRPCInvalidRequestError(_id, "Invalid version number: " + 2.0)
+            raise JRPCInvalidRequestError(_id, "Invalid version number: " + version)
         if method not in self.exported_methods:
             raise JRPCUnknownMethodError(method, _id)
 
@@ -101,7 +101,7 @@ class BaseService(object):
             req = json.loads(web.data())
             version, _id, method = self.validate_request(req)
             disp = getattr(self, method)()
-            response = json.dumps({"jsonrpc": "2.0", "id": _id, "result": disp})
+            response = json.dumps({"jsonrpc": "2.0", "id": _id, "result": {"name": self.name, "disponibility": disp}})
             
         except JRPCError as e:
             response = str(e)
@@ -110,7 +110,7 @@ class BaseService(object):
             response = json.dumps({"jsonrpc": "2.0", "id": _id, "error": {"code": -32700, "message": "Parse error"}})
             
         except Exception as e:
-            response = json.dumps({"jsonrpc": "2.0", "id": _id, "error": {"code": -32099, "message": "Internal server error"}})
+            response = json.dumps({"jsonrpc": "2.0", "id": _id, "error": {"code": -32099, "message": "Internal server error: " + str(e)}})
 
         return response
 
