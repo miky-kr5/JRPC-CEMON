@@ -197,23 +197,24 @@ int main(int argc, char ** argv) {
     return EXIT_FAILURE;
   }
 
-  printf("\nWelcome to " ANSI_BOLD_RED "J" ANSI_BOLD_GREEN "RPC" ANSI_RESET_STYLE "-" ANSI_BOLD_BLUE "CEMON" ANSI_RESET_STYLE "\n\n");
+  printf("\nWelcome to the " ANSI_BOLD_RED "J" ANSI_BOLD_GREEN "RPC" ANSI_RESET_STYLE "-" ANSI_BOLD_BLUE "CEMON" ANSI_RESET_STYLE " libcurl client.\n\n");
   printf("Reading service URLs from " ANSI_BOLD_GREEN "%s" ANSI_RESET_STYLE "\n\n", argv[1]);
 
   if(!read_conf(argv[1])) {
-    fprintf(stderr, ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": failed to parse config file.\n");
+    fprintf(stderr, ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": failed to parse config file.\n\n");
     return EXIT_FAILURE;
   }
 
   curl_global_init(CURL_GLOBAL_ALL);
   curl = curl_easy_init();
 
+  printf("Contacting services:\n");
   if(curl) {
     for(i = 0; i < num_services; i++) {
       chunk.memory = malloc(1);
       chunk.size = 0;
 
-      printf("SERVICE: " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
+      printf("Service: " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
       
       json_req = json_pack(JANSSON_REQ_FMT_STR,
 			   JSON_RPC_REQ_JRPC,
@@ -240,7 +241,7 @@ int main(int argc, char ** argv) {
 #endif
 
       } else {
-	printf(" [" ANSI_BOLD_GREEN " OK " ANSI_RESET_STYLE "] DISP: " ANSI_BOLD_BLUE "%1.2lf" ANSI_RESET_STYLE "\n", 1.0);
+	printf(" [" ANSI_BOLD_GREEN " OK " ANSI_RESET_STYLE "] Returned: " ANSI_BOLD_BLUE "%1.2lf" ANSI_RESET_STYLE "\n", 1.0);
 #ifndef NDEBUG
 	fprintf(stderr, "SERVICE: %s - RESPONSE: %s\n", services[i], chunk.memory);
 #endif
@@ -266,11 +267,14 @@ int main(int argc, char ** argv) {
     if(responses == 1)
       printf("\n" ANSI_BOLD_RED "1" ANSI_RESET_STYLE " service of %d responded.\n", num_services);
     else if(responses < num_services)
-      printf("\n" ANSI_BOLD_RED "%d" ANSI_RESET_STYLE " services of %d responded.\n", responses, num_services);
+      printf("\n" ANSI_BOLD_RED "%d" ANSI_RESET_STYLE " services out of %d responded.\n", responses, num_services);
     else
-      printf("\n" ANSI_BOLD_GREEN "%d" ANSI_RESET_STYLE " services of %d responded.\n", responses, num_services);
+      printf("\n" ANSI_BOLD_GREEN "%d" ANSI_RESET_STYLE " services out of %d responded.\n", responses, num_services);
 
-    printf("The disponibility of the service is: " ANSI_BOLD_GREEN "%1.2lf" ANSI_RESET_STYLE "\n\n", disponibility);
+    if(disponibility >= 0.95)
+      printf("The disponibility of the service is: " ANSI_BOLD_GREEN "%1.2lf" ANSI_RESET_STYLE "\n\n", disponibility);
+    else
+      printf("The disponibility of the service is: " ANSI_BOLD_BLUE "%1.2lf" ANSI_RESET_STYLE "\n\n", disponibility);
     
     curl_easy_cleanup(curl);
     curl_global_cleanup();
