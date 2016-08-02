@@ -26,10 +26,12 @@
 /* Uses the "WriteMemoryCallback" function and associated data structure from the
  * cURL tutorials. WriteMemoryCallback is copyright (C) 1998, 2016 of Daniel Stenberg.
  */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include <jansson.h>
 #include <curl/curl.h>
@@ -47,11 +49,12 @@
 static const char * JSON_RPC_REQ_JRPC   = "jsonrpc";
 static const char * JSON_RPC_VERSION    = "2.0";
 static const char * JSON_RPC_REQ_METHOD = "method";
+static const char * JSON_RPC_REQ_PARAMS = "params";
 static const char * JSON_RPC_REQ_ID     = "id";
 
 /* Jansson format string for a JSON-RPC request.
  */
-static const char * JANSSON_REQ_FMT_STR = "{sssssi}";
+static const char * JANSSON_REQ_FMT_STR = "{sssss[ss]si}";
 
 /* JSON-RPC standard error codes.
  */
@@ -153,7 +156,7 @@ bool_t read_conf(const char * file_name) {
 
   /* Allocate memory for the URLs. */
   services = (char **)malloc(sizeof(char*) * num_services);
-  memset(services, (int)NULL, sizeof(char **) * num_services);
+  memset(services, 0, sizeof(char **) * num_services);
 
   /* Read all services. */
   for(i = 0; i < num_services; i++) {
@@ -183,21 +186,22 @@ bool_t read_conf(const char * file_name) {
  * The function of the hour.
  */
 int main(int argc, char ** argv) {
-  int          i;                             // Index used in loops.
-  int          curr_id   = BASE_ID;           // Id of the current request.
-  int          responses = 0;                 // Number of services that responded correctly.
-  double       disponibility = 1.0;           // Total disponibility of the system.
-  CURL   *     curl;                          // cURL handle.
-  CURLcode     res;                           // cURL return code.
-  data_t       chunk;                         // Data obtained from a service.
-  json_t *     json_req = NULL;               // Jansson representation of a JSON-RPC request message.
-  char   *     req;                           // JSON-RPC request message as text.
-  json_t *     root = NULL;                   // Root element of a JSON-RPC response message.
-  json_error_t error;                         // Jansson return code.
+  int                 i;                             // Index used in loops.
+  int                 curr_id   = BASE_ID;           // Id of the current request.
+  int                 responses = 0;                 // Number of services that responded correctly.
+  double              disponibility = 1.0;           // Total disponibility of the system.
+  CURL   *            curl;                          // cURL handle.
+  CURLcode            res;                           // cURL return code.
+  data_t              chunk;                         // Data obtained from a service.
+  json_t *            json_req = NULL;               // Jansson representation of a JSON-RPC request message.
+  char   *            req;                           // JSON-RPC request message as text.
+  json_t *            root = NULL;                   // Root element of a JSON-RPC response message.
+  json_error_t        error;                         // Jansson return code.
+  struct curl_slist * list = NULL;                   // HTTP headers list.
 
   /* Check command line arguments. */
-  if(argc < 2) {
-    fprintf(stderr, "Usage: %s FILE\n", argv[0]);
+  if(argc < 4) {
+    fprintf(stderr, "Usage: %s FILE START_DATE END_DATE\n", argv[0]);
     return EXIT_FAILURE;
   }
 
@@ -215,6 +219,9 @@ int main(int argc, char ** argv) {
   curl_global_init(CURL_GLOBAL_ALL);
   curl = curl_easy_init();
 
+  /* Set the only HTTP header we will use. */
+  list = curl_slist_append(list, "Content-Type: application/json");
+
   printf("Contacting services:\n");
   if(curl) {
     /* Contact each service read from the config file. */
@@ -230,9 +237,14 @@ int main(int argc, char ** argv) {
 			   JSON_RPC_VERSION,
 			   JSON_RPC_REQ_METHOD,
 			   METHOD_NAME,
+			   JSON_RPC_REQ_PARAMS,
+			   argv[2],
+			   argv[3],
 			   JSON_RPC_REQ_ID,
 			   curr_id++);
+      assert(json_req != NULL);
       req = json_dumps(json_req, JSON_INDENT(0));
+      assert(req != NULL);
       
       /* Set up the connection parameters. */
       curl_easy_setopt(curl, CURLOPT_URL, services[i]);                   // The connection URL.
@@ -241,6 +253,7 @@ int main(int argc, char ** argv) {
       curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);              // The user agent string.
       curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req);                    // The HTTP POST data to send.
       curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(req));   // The length of the POST data.
+      curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);                   // The "Content-Type" HTTP header field.
  
       /* Perform the connection. */
       res = curl_easy_perform(curl);
@@ -248,7 +261,7 @@ int main(int argc, char ** argv) {
       if(res != CURLE_OK) {
 	/* If the service failed to respond or wasn't there then print an error message. */
 	printf(" [" ANSI_BOLD_RED "FAIL" ANSI_RESET_STYLE "]\n");
-	printf(ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": Service did not answer.\n");
+	printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": Service did not answer.\n");
 #ifndef NDEBUG
 	fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 #endif
@@ -263,10 +276,10 @@ int main(int argc, char ** argv) {
 	/* Attempt to parse the JSON text received. */
 	root = json_loads(chunk.memory, 0, &error);
 	if(!root) {
-	  printf(ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": failed to parse response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
+	  printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": failed to parse response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
 	} else {
 	  if(validate_response(root)) {
-	    printf(ANSI_BOLD_GREEN "Returned" ANSI_RESET_STYLE " {Name: " ANSI_BOLD_YELLOW "%s" ANSI_RESET_STYLE, "COMING SOON");
+	    printf("\t" ANSI_BOLD_GREEN "Returned" ANSI_RESET_STYLE " {Name: " ANSI_BOLD_YELLOW "%s" ANSI_RESET_STYLE, "COMING SOON");
 	    printf(", Disponibility: " ANSI_BOLD_YELLOW "%1.2lf" ANSI_RESET_STYLE "}\n", 1.0);
 	    responses++;
 	  }
@@ -297,6 +310,7 @@ int main(int argc, char ** argv) {
       printf("The disponibility of the service is: " ANSI_BOLD_BLUE "%1.2lf" ANSI_RESET_STYLE "\n\n", disponibility);
     
     /* Close cURL. */
+    curl_slist_free_all(list);
     curl_easy_cleanup(curl);
     curl_global_cleanup();
   }

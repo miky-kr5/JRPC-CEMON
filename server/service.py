@@ -33,12 +33,17 @@ import json
 
 import web
 
+CEMON_SERVICE_NAME = "DEFAULT"
+
+JRPC_PARSE_ERROR      = -32700
+JRPC_INVALID_REQ      = -32600
+JRPC_INVALID_METHOD   = -32601
+JRPC_INVALID_PARAMS   = -32602
+JRPC_RPC_ERROR        = -32603
+JRPC_NO_NOTIFY_ERROR  = -32089       
+
 urls = (
-    '/database', 'DBService',
-    '/server', 'ServerService',
-    '/app', 'AppService',
-    '/link', 'LinkService',
-    '/router', 'RouterService'
+    '/rpc', 'JRPCService'
 )
 
 class JRPCError(Exception):
@@ -50,7 +55,7 @@ class JRPCInvalidRequestError(JRPCError):
         self.msg = msg
 
     def __str__(self):
-        return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": -32600, "message": "Invalid request: " + self.msg}})
+        return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": JRPC_INVALID_REQ, "message": "Invalid request: " + self.msg}})
 
 class JRPCUnknownMethodError(JRPCError):
     def __init__(self, method, jrpc_id):
@@ -58,29 +63,54 @@ class JRPCUnknownMethodError(JRPCError):
         self.jrpc_id = jrpc_id
 
     def __str__(self):
-        return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": -32601, "message": "Method '" + self.method + "' not found"}})
+        return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": JRPC_INVALID_METHOD, "message": "Method '" + self.method + "' not found"}})
     
 class JRPCNotificationError(JRPCError):
-    def __init__(self):
-        pass
-
     def __str__(self):
-        return json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32089, "message": 'JSON-RPC notifications not supported'}})
+        return json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": JRPC_NO_NOTIFY_ERROR, "message": 'JSON-RPC notifications not supported'}})
 
-class BaseService(object):
-    name = "BASE SERVICE"
+class JRPCInvalidParamsError(JRPCInvalidRequestError):
+    def __str__(self):
+        return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": JRPC_INVALID_PARAMS, "message": "Invalid parameters: " + self.msg}})
+
+class JRPCService(object):
     exported_methods = ['get_disponibility']
 
-    def get_disponibility(self):
+    def get_disponibility(self, start_date, end_date):
         return r.random()
-    
-    def validate_request(self, req):
+
+    def _check_params(self, req, method, _id):
+        params = None
+
+        if req.has_key("params"):
+            params = req["params"] 
+
+            if type(params) == list:
+                if len(params) != 2:
+                    JRPCInvalidParamsError(_id, "Array params must contain two values")
+                else:
+                    if type(params[0]) != str or type(params[1]) != str:
+                        JRPCInvalidParamsError(_id, "Array params must be string values")
+
+            elif type(params) == dict:
+                if not params.has_key("start_date") or not params.has_key("end_date"):
+                    JRPCInvalidParamsError(_id, 'Missing key params "start_date" or "end_date"')
+            else:
+                raise JRPCInvalidParamsError(_id, "Params must an array or object")
+
+        else:
+            raise JRPCInvalidParamsError(_id, 'Params are required for "' + method + '"')
+
+        return params
+
+    def _validate_request(self, req):
         try:
             if not req.has_key("jsonrpc") or not req.has_key("method"):
                 raise JRPCInvalidRequestError(None, "Request is missing mandatory attributes")
 
             if not req.has_key("id"):
                 raise JRPCNotificationError()
+
         except AttributeError as e:
             raise JRPCInvalidRequestError(None, "Request's root is not a JSON object")
 
@@ -90,18 +120,29 @@ class BaseService(object):
 
         if version != "2.0":
             raise JRPCInvalidRequestError(_id, "Invalid version number: " + version)
+
         if method not in self.exported_methods:
             raise JRPCUnknownMethodError(method, _id)
 
-        return (version, _id, method)
+        params = self._check_params(req, method, _id)
+
+        return (version, _id, method, params)
 
     def POST(self):
+        global CEMON_SERVICE_NAME
+        CEMON_SERVICE_NAME = sys.argv[-1]
+
         try:
             _id = None
             req = json.loads(web.data())
-            version, _id, method = self.validate_request(req)
-            disp = getattr(self, method)()
-            response = json.dumps({"jsonrpc": "2.0", "id": _id, "result": {"name": self.name, "disponibility": disp}})
+            version, _id, method, params = self._validate_request(req)
+            if type(params) == list:
+                disp = getattr(self, method)(params[0], params[1])
+            elif type(params) == dict:
+                disp = getattr(self, method)(params["start_date"], params["end_date"])
+            else:
+                raise Exception("Mind boggling invalid params!")
+            response = json.dumps({"jsonrpc": "2.0", "id": _id, "result": {"name": CEMON_SERVICE_NAME, "disponibility": disp}})
             
         except JRPCError as e:
             response = str(e)
@@ -114,21 +155,9 @@ class BaseService(object):
 
         return response
 
-class DBService(BaseService):
-    name = "DATABASE"
-
-class ServerService(BaseService):
-    name = "SERVER HARDWARE"
-
-class AppService(BaseService):
-    name = "APPLICATION"
-
-class LinkService(BaseService):
-    name = "INTERNET LINK"
-
-class RouterService(BaseService):
-    name = "INTERNET ROUTER"
-    
 if __name__ == "__main__":
-    app = web.application(urls, globals())
-    app.run()
+    if len(sys.argv) >= 3:
+        app = web.application(urls, globals())
+        app.run()
+    else:
+        raise Exception("Usage: " + sys.argv[0] + " NAME")
