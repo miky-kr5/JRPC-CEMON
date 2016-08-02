@@ -245,6 +245,19 @@ double get_disp(json_t * root) {
 }
 
 /**
+ * Prettyprints a JSON-RPC error message.
+ */
+
+void print_error(json_t * root, int i) {
+  json_t * data     = json_object_get(root, JSON_RPC_REQ_ERROR);
+  json_t * err_code = json_object_get(data, JSON_RPC_REQ_ERROR_CODE);
+  json_t * err_msg  = json_object_get(data, JSON_RPC_REQ_ERROR_MSG);
+  printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": got an error response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
+  printf("\t  Code: " ANSI_BOLD_BLUE "%lld" ANSI_RESET_STYLE "\n", json_integer_value(err_code));
+  printf("\t  Message: " ANSI_BOLD_YELLOW "%s" ANSI_RESET_STYLE "\n", json_string_value(err_msg));
+}
+
+/**
  * Load the service URLs from a file.
  */
 bool_t read_conf(const char * file_name) {
@@ -415,7 +428,7 @@ int main(int argc, char ** argv) {
 	    break;
 
 	  case ERROR:
-	    printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": got an error response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
+	    print_error(root, i);
 	    break;
 
 	  case INVALID:
