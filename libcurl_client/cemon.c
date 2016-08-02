@@ -46,15 +46,19 @@
 
 /* JSON-RPC protocol field constants.
  */
-static const char * JSON_RPC_REQ_JRPC   = "jsonrpc";
-static const char * JSON_RPC_VERSION    = "2.0";
-static const char * JSON_RPC_REQ_METHOD = "method";
-static const char * JSON_RPC_REQ_PARAMS = "params";
-static const char * JSON_RPC_REQ_ID     = "id";
+static const char * JSON_RPC_REQ_JRPC       = "jsonrpc";
+static const char * JSON_RPC_VERSION        = "2.0";
+static const char * JSON_RPC_REQ_METHOD     = "method";
+static const char * JSON_RPC_REQ_PARAMS     = "params";
+static const char * JSON_RPC_REQ_ID         = "id";
+static const char * JSON_RPC_REQ_RESULT     = "result";
+static const char * JSON_RPC_REQ_ERROR      = "error";
+static const char * JSON_RPC_REQ_ERROR_CODE = "code";
+static const char * JSON_RPC_REQ_ERROR_MSG  = "message";
 
-/* Jansson format string for a JSON-RPC request.
+/* Jansson format strings.
  */
-static const char * JANSSON_REQ_FMT_STR = "{sssss[ss]si}";
+static const char * JANSSON_REQ_FMT_STR        = "{sssss[ss]si}";
 
 /* JSON-RPC standard error codes.
  */
@@ -69,8 +73,10 @@ typedef enum JRPC_ERRORS { JRPC_PARSE_ERROR      = -32700,
 
 /* Cemon specific JSON-RPC request parameters.
  */
-static const char * METHOD_NAME = "get_disponibility";
-static const int    BASE_ID     = 1;
+static const char * METHOD_NAME     = "get_disponibility";
+static const char * RESULT_NAME_KEY = "name";
+static const char * RESULT_DISP_KEY = "disponibility";
+static const int    BASE_ID         = 1;
 
 /* User agent and service urls for cURL.
  */
@@ -85,11 +91,16 @@ typedef struct DATA {
   size_t size;
 } data_t;
 
-/* Boolean alias for convenience.
+/* Other enums.
  */
 typedef enum BOOL { FALSE = 0,
 		    TRUE = 1
 } bool_t;
+
+typedef enum RESPONSE_TYPES { RESULT = 0,
+			      ERROR,
+			      INVALID
+} response_t;
 
 /**
  * cURL uses this function to copy the data returned by a service into a struct
@@ -113,13 +124,124 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 }
 
 /**
- * Checks if a response obtained from a service is a valid JSON-RPC message.
+ * Checks if a response obtained from a service is a valid JSON-RPC result message.
  */
-bool_t validate_response(json_t * root) {
+bool_t validate_result(json_t * root, int req_id) {
+  json_t * data, * res_data;
+
   if(!json_is_object(root))
     return FALSE;
-  
+
+  /* Validate the "jsonrpc" property. */
+  data = json_object_get(root, JSON_RPC_REQ_JRPC);
+  if(!json_is_string(data))
+    return FALSE;
+  else
+    if(strcmp(json_string_value(data), JSON_RPC_VERSION) != 0)
+      return FALSE;
+
+  /* Validate the response id. */
+  data = json_object_get(root, JSON_RPC_REQ_ID);
+  if(!json_is_integer(data) && !json_is_string(data) && !json_is_null(data))
+    return FALSE;
+  else if(json_is_integer(data)) {
+    if(json_integer_value(data) != req_id)
+      return FALSE;
+  }
+
+  /* Validate the result object. */
+  data = json_object_get(root, JSON_RPC_REQ_RESULT);
+  if(!json_is_object(data))
+    return FALSE;
+  else {
+    /* Validate the result service name. */
+    res_data = json_object_get(data, RESULT_NAME_KEY);
+    if(!json_is_string(res_data))
+      return FALSE;
+
+    /* Validate the result disponibility. */
+    res_data = json_object_get(data, RESULT_DISP_KEY);
+    if(!json_is_real(res_data))
+      return FALSE;
+  }
+
   return TRUE;
+}
+
+/**
+ * Checks if a response obtained from a service is a valid JSON-RPC error message.
+ */
+bool_t validate_error(json_t * root, int req_id) {
+  json_t * data, * res_data;
+
+  if(!json_is_object(root))
+    return FALSE;
+
+  /* Validate the "jsonrpc" property. */
+  data = json_object_get(root, JSON_RPC_REQ_JRPC);
+  if(!json_is_string(data))
+    return FALSE;
+  else
+    if(strcmp(json_string_value(data), JSON_RPC_VERSION) != 0)
+      return FALSE;
+
+  /* Validate the response id. */
+  data = json_object_get(root, JSON_RPC_REQ_ID);
+  if(!json_is_integer(data) && !json_is_string(data) && !json_is_null(data))
+    return FALSE;
+  else if(json_is_integer(data)) {
+    if(json_integer_value(data) != req_id)
+      return FALSE;
+  }
+
+  /* Validate the error object. */
+  data = json_object_get(root, JSON_RPC_REQ_ERROR);
+  if(!json_is_object(data))
+    return FALSE;
+  else {
+    /* Validate the error message. */
+    res_data = json_object_get(data, JSON_RPC_REQ_ERROR_MSG);
+    if(!json_is_string(res_data))
+      return FALSE;
+
+    /* Validate the errror code. */
+    res_data = json_object_get(data, JSON_RPC_REQ_ERROR_CODE);
+    if(!json_is_integer(res_data))
+      return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * Checks if a response obtained from a service is a valid JSON-RPC message.
+ */
+response_t validate_response(json_t * root, int req_id) {
+  if(validate_result(root, req_id))
+    return RESULT;
+  else
+    if(validate_error(root, req_id))
+      return ERROR;
+    else
+      return INVALID;
+}
+
+/**
+ * Get the service name from a response.
+ */
+const char * get_service_name(json_t * root) {
+  json_t * data = json_object_get(root, JSON_RPC_REQ_RESULT);
+  json_t * res_data = json_object_get(data, RESULT_NAME_KEY);
+  return json_string_value(res_data);
+}
+
+/**
+ * Get the disponibility from a response.
+ */
+double get_disp(json_t * root) {
+  json_t * data = json_object_get(root, JSON_RPC_REQ_RESULT);
+  json_t * res_data = json_object_get(data, RESULT_DISP_KEY);
+  return json_real_value(res_data);
 }
 
 /**
@@ -198,6 +320,7 @@ int main(int argc, char ** argv) {
   json_t *            root = NULL;                   // Root element of a JSON-RPC response message.
   json_error_t        error;                         // Jansson return code.
   struct curl_slist * list = NULL;                   // HTTP headers list.
+  response_t          val_res;                       // Response validation result.
 
   /* Check command line arguments. */
   if(argc < 4) {
@@ -241,7 +364,7 @@ int main(int argc, char ** argv) {
 			   argv[2],
 			   argv[3],
 			   JSON_RPC_REQ_ID,
-			   curr_id++);
+			   curr_id);
       assert(json_req != NULL);
       req = json_dumps(json_req, JSON_INDENT(0));
       assert(req != NULL);
@@ -278,18 +401,34 @@ int main(int argc, char ** argv) {
 	if(!root) {
 	  printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": failed to parse response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
 	} else {
-	  if(validate_response(root)) {
-	    printf("\t" ANSI_BOLD_GREEN "Returned" ANSI_RESET_STYLE " {Name: " ANSI_BOLD_YELLOW "%s" ANSI_RESET_STYLE, "COMING SOON");
-	    printf(", Disponibility: " ANSI_BOLD_YELLOW "%1.2lf" ANSI_RESET_STYLE "}\n", 1.0);
+	  val_res = validate_response(root, curr_id);
+
+	  switch(val_res) {
+	  case RESULT:
+	    printf("\t" ANSI_BOLD_GREEN "Returned" ANSI_RESET_STYLE " {Name: " ANSI_BOLD_YELLOW "%s" ANSI_RESET_STYLE, get_service_name(root));
+	    printf(", Disponibility: " ANSI_BOLD_YELLOW "%1.2lf" ANSI_RESET_STYLE "}\n", get_disp(root));
+
+	    disponibility *= get_disp(root);
+
 	    responses++;
+
+	    break;
+
+	  case ERROR:
+	    printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": got an error response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
+	    break;
+
+	  case INVALID:
+	  default:
+	    printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": invalid response message from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
 	  }
 
 	  json_decref(root);
 	}
       }
 
-      /* Calculate the disponibility. */
-      disponibility *= 1.0;
+      /* Increase id. */
+      curr_id++;
       
       /* Clean up. */
       free(chunk.memory);
@@ -304,10 +443,14 @@ int main(int argc, char ** argv) {
       printf("\n" ANSI_BOLD_GREEN "%d" ANSI_RESET_STYLE " out of " ANSI_BOLD_GREEN "%d" ANSI_RESET_STYLE " services responded.\n", responses, num_services);
 
     /* Print the disponibility of the system. */
-    if(disponibility >= 0.95)
-      printf("The disponibility of the service is: " ANSI_BOLD_GREEN "%1.2lf" ANSI_RESET_STYLE "\n\n", disponibility);
-    else
-      printf("The disponibility of the service is: " ANSI_BOLD_BLUE "%1.2lf" ANSI_RESET_STYLE "\n\n", disponibility);
+    if(responses > 0) {
+      if(disponibility >= 0.95)
+	printf("The disponibility of the service is: " ANSI_BOLD_GREEN "%lf" ANSI_RESET_STYLE "\n\n", disponibility);
+      else
+	printf("The disponibility of the service is: " ANSI_BOLD_BLUE "%lf" ANSI_RESET_STYLE "\n\n", disponibility);
+    } else {
+      printf(ANSI_BOLD_RED "Cannot calculate the disponibility of the service.\n\n" ANSI_RESET_STYLE);
+    }
     
     /* Close cURL. */
     curl_slist_free_all(list);

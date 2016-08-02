@@ -27,13 +27,16 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import random as r
+import numpy as np
 import sys
 import json
 
 import web
 
 CEMON_SERVICE_NAME = "DEFAULT"
+
+SERVICE_MU = 0.95
+SERVICE_SIGMA = 0.2
 
 JRPC_PARSE_ERROR      = -32700
 JRPC_INVALID_REQ      = -32600
@@ -82,7 +85,7 @@ class JRPCService(object):
     exported_methods = ['get_disponibility']
 
     def get_disponibility(self, start_date, end_date):
-        return r.random()
+        return min(abs(np.random.normal(SERVICE_MU, SERVICE_SIGMA)), 1.0)
 
     def _check_params(self, req, method, _id):
         params = None
