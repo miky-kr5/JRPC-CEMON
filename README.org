@@ -1,0 +1,27 @@
+* JRPC-CEMON
+Web service excercise using JSON-RPC over HTTP with Web.py. Course work for UCV's Computer Networks graduate course.
+
+** Installation
+
+*** Client
+
+Just compile with make and run the ~cemon~ executable. Install [[http://curl.haxx.se/][libcurl]] and [[http://www.digip.org/jansson/][Jansson]] before compiling.
+
+*** Server
+
+The server requires [[http://webpy.org/][Web.py]] and [[http://www.numpy.org/][NumPy]].
+
+**** Localhost test
+
+Run a localhost test with the Web.py server by running the ~test.sh~ script inside the server directory. You can edit the script to
+change the port numbers and binding address of Web.py.
+
+**** FastCGI server
+
+Inside the ~server/lighttpd~ directory are config files for the [[http://www.lighttpd.net/][lighttpd]] Web server and a startup script.
+
+The config files assume that the ~service.py~ script will be installed in the ~/var/cemon~ directory. Edit the files to use another
+directory for the servers. You can also change the ports in the files if you are already using the ports in the [8080:8084] range.
+
+The startup script assumes the configuration files will be placed inside the ~/root/cemon_server~ directory. Edit the script to
+use the location where you placed the config files. The startup script must be run as root.
