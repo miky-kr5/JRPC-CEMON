@@ -41,6 +41,7 @@ JRPC_INVALID_METHOD   = -32601
 JRPC_INVALID_PARAMS   = -32602
 JRPC_RPC_ERROR        = -32603
 JRPC_NO_NOTIFY_ERROR  = -32089       
+JRPC_NO_BATCH_ERROR   = -32088
 
 urls = (
     '/rpc', 'JRPCService'
@@ -69,6 +70,10 @@ class JRPCNotificationError(JRPCError):
     def __str__(self):
         return json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": JRPC_NO_NOTIFY_ERROR, "message": 'JSON-RPC notifications not supported'}})
 
+class JRPCBatchError(JRPCError):
+    def __str__(self):
+        return json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": JRPC_NO_BATCH_ERROR, "message": 'JSON-RPC batch requests not supported'}})
+
 class JRPCInvalidParamsError(JRPCInvalidRequestError):
     def __str__(self):
         return json.dumps({"jsonrpc": "2.0", "id": self.jrpc_id, "error": {"code": JRPC_INVALID_PARAMS, "message": "Invalid parameters: " + self.msg}})
@@ -87,14 +92,14 @@ class JRPCService(object):
 
             if type(params) == list:
                 if len(params) != 2:
-                    JRPCInvalidParamsError(_id, "Array params must contain two values")
+                    raise JRPCInvalidParamsError(_id, "Array params must contain two values")
                 else:
-                    if type(params[0]) != str or type(params[1]) != str:
-                        JRPCInvalidParamsError(_id, "Array params must be string values")
+                    if type(params[0]) != unicode or type(params[1]) != unicode:
+                        raise JRPCInvalidParamsError(_id, "Array params must be string values")
 
             elif type(params) == dict:
                 if not params.has_key("start_date") or not params.has_key("end_date"):
-                    JRPCInvalidParamsError(_id, 'Missing key params "start_date" or "end_date"')
+                    raise JRPCInvalidParamsError(_id, 'Missing key params "start_date" or "end_date"')
             else:
                 raise JRPCInvalidParamsError(_id, "Params must an array or object")
 
@@ -104,29 +109,32 @@ class JRPCService(object):
         return params
 
     def _validate_request(self, req):
-        try:
-            if not req.has_key("jsonrpc") or not req.has_key("method"):
-                raise JRPCInvalidRequestError(None, "Request is missing mandatory attributes")
+        if type(req) == list:
+            raise JRPCBatchError()
+        else:
+            try:
+                if not req.has_key("jsonrpc") or not req.has_key("method"):
+                    raise JRPCInvalidRequestError(None, "Request is missing mandatory attributes")
 
-            if not req.has_key("id"):
-                raise JRPCNotificationError()
+                if not req.has_key("id"):
+                    raise JRPCNotificationError()
 
-        except AttributeError as e:
-            raise JRPCInvalidRequestError(None, "Request's root is not a JSON object")
+            except AttributeError as e:
+                raise JRPCInvalidRequestError(None, "Request's root is not a JSON object")
 
-        version = req["jsonrpc"]
-        _id = req["id"]
-        method = req["method"]
+            version = req["jsonrpc"]
+            _id = req["id"]
+            method = req["method"]
 
-        if version != "2.0":
-            raise JRPCInvalidRequestError(_id, "Invalid version number: " + version)
+            if version != "2.0":
+                raise JRPCInvalidRequestError(_id, "Invalid version number: " + version)
 
-        if method not in self.exported_methods:
-            raise JRPCUnknownMethodError(method, _id)
+            if method not in self.exported_methods:
+                raise JRPCUnknownMethodError(method, _id)
 
-        params = self._check_params(req, method, _id)
+            params = self._check_params(req, method, _id)
 
-        return (version, _id, method, params)
+            return (version, _id, method, params)
 
     def POST(self):
         global CEMON_SERVICE_NAME
