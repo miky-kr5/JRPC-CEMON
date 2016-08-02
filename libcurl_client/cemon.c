@@ -412,7 +412,7 @@ int main(int argc, char ** argv) {
 	/* Attempt to parse the JSON text received. */
 	root = json_loads(chunk.memory, 0, &error);
 	if(!root) {
-	  printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": failed to parse response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
+	  printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": failed to parse response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE "\n", services[i]);
 	} else {
 	  val_res = validate_response(root, curr_id);
 
@@ -433,7 +433,7 @@ int main(int argc, char ** argv) {
 
 	  case INVALID:
 	  default:
-	    printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": invalid response message from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE, services[i]);
+	    printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": invalid response message from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE "\n", services[i]);
 	  }
 
 	  json_decref(root);
