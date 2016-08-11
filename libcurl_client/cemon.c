@@ -204,7 +204,7 @@ bool_t validate_error(json_t * root, int req_id) {
     if(!json_is_string(res_data))
       return FALSE;
 
-    /* Validate the errror code. */
+    /* Validate the error code. */
     res_data = json_object_get(data, JSON_RPC_REQ_ERROR_CODE);
     if(!json_is_integer(res_data))
       return FALSE;
@@ -247,7 +247,6 @@ double get_disp(json_t * root) {
 /**
  * Prettyprints a JSON-RPC error message.
  */
-
 void print_error(json_t * root, int i) {
   json_t * data     = json_object_get(root, JSON_RPC_REQ_ERROR);
   json_t * err_code = json_object_get(data, JSON_RPC_REQ_ERROR_CODE);
@@ -412,30 +411,37 @@ int main(int argc, char ** argv) {
 	/* Attempt to parse the JSON text received. */
 	root = json_loads(chunk.memory, 0, &error);
 	if(!root) {
+	  /* Parsing failed. */
 	  printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": failed to parse response from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE "\n", services[i]);
+
 	} else {
+	  /* Check if the response is a valid JSON-RPC 2.0 response or error message. */
 	  val_res = validate_response(root, curr_id);
 
+	  /* Check the type of response. */
 	  switch(val_res) {
 	  case RESULT:
+	    /* If it is a valid result then apply the disponibility calculation. */
 	    printf("\t" ANSI_BOLD_GREEN "Returned" ANSI_RESET_STYLE " {Name: " ANSI_BOLD_YELLOW "%s" ANSI_RESET_STYLE, get_service_name(root));
 	    printf(", Disponibility: " ANSI_BOLD_YELLOW "%1.2lf" ANSI_RESET_STYLE "}\n", get_disp(root));
 
 	    disponibility *= get_disp(root);
-
 	    responses++;
 
 	    break;
 
 	  case ERROR:
+	    /* If it is an error, then prettyprint it.*/
 	    print_error(root, i);
 	    break;
 
 	  case INVALID:
 	  default:
+	    /* The server responded with something weird. */
 	    printf("\t" ANSI_BOLD_RED "ERROR" ANSI_RESET_STYLE ": invalid response message from " ANSI_BOLD_BLUE "%-40s" ANSI_RESET_STYLE "\n", services[i]);
 	  }
 
+	  /* Release the response message. */
 	  json_decref(root);
 	}
       }
